@@ -29,11 +29,11 @@
           <button class="icon-button" type="button" data-action="reset" aria-label="重开牌桌" title="重开牌桌">↻</button>
         </div>
         ${$t()}
-        ${St(t)}
-        ${Ht(t)}
-        ${Pt()}
         ${Qt(t)}
+        ${Ht(t)}
         ${xt(t)}
+        ${St(t)}
+        ${Pt()}
         ${Lt()}
         ${Ot()}
         <div class="log-list" aria-label="牌局记录">
@@ -144,7 +144,7 @@
       <em>底池 ${r.handSummary.pot}</em>
     </div>
   `:""}function Qt(t){if(r.phase==="handComplete")return"";const e=r.players.findIndex(H=>H.isHero),l=r.phase==="betting"&&r.activeIndex===e,c=Math.max(0,r.currentBet-t.bet),d=ms(t),h=vs(t),p=l&&d>=h&&t.stack>c,f=c>0?`跟注 ${Math.min(c,t.stack)}`:"过牌",m=r.currentBet>0?`加注到 ${r.raiseTo}`:`下注 ${r.raiseTo}`;return`
-    <div class="action-pad ${l?"":"is-locked"}">
+    <div class="action-pad ${l?"is-live":"is-locked"}">
       ${Ft(t,l,c)}
       <div class="action-info">
         <span>需跟注</span><strong>${Math.min(c,t.stack)}</strong>

@@ -754,11 +754,11 @@ function render() {
           <button class="icon-button" type="button" data-action="reset" aria-label="重开牌桌" title="重开牌桌">↻</button>
         </div>
         ${renderTurnBanner()}
-        ${renderSessionStats(hero)}
-        ${renderSituation(hero)}
-        ${renderHandSummary()}
         ${renderControls(hero)}
+        ${renderSituation(hero)}
         ${renderDecisionCoach(hero)}
+        ${renderSessionStats(hero)}
+        ${renderHandSummary()}
         ${renderShowdown()}
         ${renderHandHistory()}
         <div class="log-list" aria-label="牌局记录">
@@ -1258,7 +1258,7 @@ function renderControls(hero) {
   const raiseLabel = state.currentBet > 0 ? `加注到 ${state.raiseTo}` : `下注 ${state.raiseTo}`;
 
   return `
-    <div class="action-pad ${heroTurn ? "" : "is-locked"}">
+    <div class="action-pad ${heroTurn ? "is-live" : "is-locked"}">
       ${renderActionNote(hero, heroTurn, toCall)}
       <div class="action-info">
         <span>需跟注</span><strong>${Math.min(toCall, hero.stack)}</strong>

@@ -389,15 +389,17 @@ button:disabled {
   gap: 9px;
   width: clamp(142px, 20vw, 204px);
   min-height: 118px;
-  border: 1px solid rgba(255, 247, 229, 0.14);
+  border: 1px solid rgba(255, 247, 229, 0.18);
   border-radius: 8px;
   padding: 10px;
   background:
-    linear-gradient(180deg, rgba(42, 33, 29, 0.88), rgba(18, 13, 12, 0.9)),
-    rgba(32, 24, 21, 0.86);
+    linear-gradient(180deg, rgba(44, 34, 29, 0.28), rgba(12, 9, 8, 0.16)),
+    rgba(13, 10, 9, 0.12);
   box-shadow:
-    0 20px 34px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 14px 24px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(6px) saturate(1.08);
+  backdrop-filter: blur(7px) saturate(1.08);
   transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease, transform 160ms ease;
 }
 
@@ -418,15 +420,21 @@ button:disabled {
 
 .seat.is-active {
   border-color: rgba(141, 229, 186, 0.94);
+  background:
+    linear-gradient(180deg, rgba(30, 80, 62, 0.24), rgba(10, 8, 7, 0.16)),
+    rgba(13, 10, 9, 0.1);
   box-shadow:
     0 0 0 2px rgba(141, 229, 186, 0.16),
-    0 0 34px rgba(141, 229, 186, 0.14),
-    0 20px 36px rgba(0, 0, 0, 0.32);
+    0 0 28px rgba(141, 229, 186, 0.12),
+    0 16px 28px rgba(0, 0, 0, 0.2);
   transform: translateY(-2px);
 }
 
 .seat.is-hero {
   border-color: rgba(141, 229, 186, 0.28);
+  background:
+    linear-gradient(180deg, rgba(23, 66, 51, 0.2), rgba(10, 8, 7, 0.16)),
+    rgba(13, 10, 9, 0.1);
 }
 
 .seat.is-folded {
@@ -543,7 +551,7 @@ button:disabled {
 
 .player-read span {
   border: 1px solid rgba(255, 247, 229, 0.1);
-  background: rgba(255, 247, 229, 0.055);
+  background: rgba(10, 8, 7, 0.22);
   color: rgba(255, 247, 229, 0.64);
 }
 

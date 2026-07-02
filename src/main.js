@@ -10,7 +10,11 @@ const BIG_BLIND = 20;
 const BOT_DELAY = 620;
 const ACTION_STEP = 10;
 const STORAGE_KEY = "texas-holdem-browser-table";
+const USERS_STORAGE_KEY = "texas-holdem-browser-users";
+const ACTIVE_USER_STORAGE_KEY = "texas-holdem-browser-active-user";
+const USER_STATE_PREFIX = `${STORAGE_KEY}:user:`;
 const STORAGE_VERSION = 2;
+const GUEST_USER_ID = "guest";
 
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
 const SUITS = ["s", "h", "d", "c"];
@@ -49,7 +53,11 @@ const HAND_LABELS = {
 const app = document.querySelector("#app");
 let botTimer = null;
 let keyboardBound = false;
+let users = loadUsers();
+let activeUserId = loadActiveUserId(users);
+let userPanelOpen = false;
 let state = loadSavedState() || createInitialState();
+syncHeroIdentity();
 
 function createInitialState() {
   return {
@@ -71,7 +79,7 @@ function createInitialState() {
     handHistory: [],
     stats: createStats(),
     players: [
-      createPlayer("hero", "你", "bottom", true, 0.18, 0.4),
+      createPlayer("hero", getActiveUserName(), "bottom", true, 0.18, 0.4),
       createPlayer("west", "西座", "left", false, 0.24, 0.38),
       createPlayer("north", "北座", "top", false, 0.52, 0.52),
       createPlayer("east", "东座", "right", false, 0.36, 0.62),
@@ -144,6 +152,9 @@ function startHand() {
     player.acted = false;
     player.lastAction = "";
     player.result = "";
+    if (player.isHero) {
+      player.name = getActiveUserName();
+    }
   });
 
   state.dealerIndex = nextPlayerIndex(state.dealerIndex);
@@ -678,13 +689,164 @@ function setHeroRaisePreset(preset) {
   render();
 }
 
+function createGuestUser() {
+  return {
+    id: GUEST_USER_ID,
+    name: "游客",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function loadUsers() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(USERS_STORAGE_KEY));
+    if (Array.isArray(saved?.users) && saved.users.length > 0) {
+      const normalizedUsers = saved.users
+        .filter((user) => user?.id && user?.name)
+        .map((user) => ({ ...user, name: normalizeUserName(user.name) || "玩家" }));
+      return ensureGuestUser(normalizedUsers);
+    }
+  } catch {
+    // Fall through to a browser-local guest profile.
+  }
+  return [createGuestUser()];
+}
+
+function ensureGuestUser(savedUsers) {
+  if (savedUsers.some((user) => user.id === GUEST_USER_ID)) {
+    return savedUsers;
+  }
+  return [createGuestUser(), ...savedUsers];
+}
+
+function saveUsers() {
+  try {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify({ users }));
+  } catch {
+    // A profile switch should not break the running table if storage is unavailable.
+  }
+}
+
+function loadActiveUserId(savedUsers) {
+  try {
+    const savedId = localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
+    if (savedUsers.some((user) => user.id === savedId)) {
+      return savedId;
+    }
+  } catch {
+    // Use the first local profile when active-user storage is unavailable.
+  }
+  return savedUsers[0]?.id || GUEST_USER_ID;
+}
+
+function saveActiveUserId() {
+  try {
+    localStorage.setItem(ACTIVE_USER_STORAGE_KEY, activeUserId);
+  } catch {
+    // Ignore storage failures; the current session still has the active user in memory.
+  }
+}
+
+function getActiveUser() {
+  return users.find((user) => user.id === activeUserId) || users[0] || createGuestUser();
+}
+
+function getActiveUserName() {
+  return getActiveUser().name || "玩家";
+}
+
+function getUserInitial(user = getActiveUser()) {
+  return (user.name || "玩").trim().slice(0, 1).toUpperCase();
+}
+
+function getActiveStateKey() {
+  return `${USER_STATE_PREFIX}${activeUserId}`;
+}
+
+function syncHeroIdentity() {
+  const hero = state?.players?.find((player) => player.isHero);
+  if (hero) {
+    hero.name = getActiveUserName();
+  }
+}
+
+function normalizeUserName(value) {
+  return String(value || "")
+    .replace(/[<>&"']/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12);
+}
+
+function createUserFromInput() {
+  const input = app.querySelector("#new-user-name");
+  const name = normalizeUserName(input?.value);
+  if (!name) {
+    input?.focus();
+    return;
+  }
+
+  const existingUser = users.find((user) => user.name.toLowerCase() === name.toLowerCase());
+  if (existingUser) {
+    switchUser(existingUser.id);
+    return;
+  }
+
+  const user = {
+    id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    createdAt: new Date().toISOString(),
+  };
+  users = [user, ...users];
+  saveUsers();
+  switchUser(user.id);
+}
+
+function switchUser(userId) {
+  const targetUser = users.find((user) => user.id === userId);
+  if (!targetUser) {
+    return;
+  }
+
+  saveState();
+  clearBotTimer();
+  activeUserId = targetUser.id;
+  userPanelOpen = false;
+  saveActiveUserId();
+  state = loadSavedState() || createInitialState();
+  syncHeroIdentity();
+
+  if (state.handNumber > 0) {
+    render();
+    scheduleBotTurn();
+  } else {
+    startHand();
+  }
+}
+
+function getUserSummary(userId) {
+  try {
+    const raw = localStorage.getItem(`${USER_STATE_PREFIX}${userId}`) || (userId === GUEST_USER_ID ? localStorage.getItem(STORAGE_KEY) : null);
+    const saved = JSON.parse(raw);
+    const savedState = saved?.state;
+    const hero = savedState?.players?.find((player) => player.isHero);
+    return {
+      handsPlayed: savedState?.stats?.handsPlayed || 0,
+      stack: hero?.stack ?? STARTING_STACK,
+    };
+  } catch {
+    return { handsPlayed: 0, stack: STARTING_STACK };
+  }
+}
+
 function addLog(message) {
   state.log = [message, ...state.log].slice(0, 9);
 }
 
 function saveState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, state }));
+    syncHeroIdentity();
+    localStorage.setItem(getActiveStateKey(), JSON.stringify({ version: STORAGE_VERSION, state }));
   } catch {
     // localStorage can be unavailable in private or restricted browser contexts.
   }
@@ -692,7 +854,8 @@ function saveState() {
 
 function loadSavedState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const raw = localStorage.getItem(getActiveStateKey()) || (activeUserId === GUEST_USER_ID ? localStorage.getItem(STORAGE_KEY) : null);
+    const saved = JSON.parse(raw);
     if (!saved || saved.version !== STORAGE_VERSION || !saved.state?.players?.length) {
       return null;
     }
@@ -713,7 +876,10 @@ function loadSavedState() {
 
 function clearSavedState() {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(getActiveStateKey());
+    if (activeUserId === GUEST_USER_ID) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   } catch {
     // Ignore storage failures; reset should still work for the running page.
   }
@@ -751,7 +917,13 @@ function render() {
             <span class="eyebrow">Hand ${state.handNumber}</span>
             <h1>德州扑克</h1>
           </div>
-          <button class="icon-button" type="button" data-action="reset" aria-label="重开牌桌" title="重开牌桌">↻</button>
+          <div class="panel-actions">
+            <button class="profile-button" type="button" data-action="open-users" aria-label="切换用户" title="切换用户">
+              <span>${getUserInitial()}</span>
+              <strong>${getActiveUserName()}</strong>
+            </button>
+            <button class="icon-button" type="button" data-action="reset" aria-label="重开牌桌" title="重开牌桌">↻</button>
+          </div>
         </div>
         ${renderTurnBanner()}
         ${renderControls(hero)}
@@ -766,10 +938,53 @@ function render() {
         </div>
       </aside>
     </div>
+    ${renderUserDialog()}
   `;
 
   bindEvents();
   saveState();
+}
+
+function renderUserDialog() {
+  if (!userPanelOpen) {
+    return "";
+  }
+
+  return `
+    <div class="modal-layer" role="dialog" aria-modal="true" aria-label="用户系统">
+      <section class="user-dialog">
+        <div class="user-dialog-head">
+          <div>
+            <span>用户系统</span>
+            <strong>本机用户档案</strong>
+          </div>
+          <button class="icon-button" type="button" data-action="close-users" aria-label="关闭用户面板" title="关闭">×</button>
+        </div>
+        <div class="new-user-row">
+          <input id="new-user-name" type="text" maxlength="12" placeholder="输入新昵称" autocomplete="off" />
+          <button type="button" data-action="create-user">创建用户</button>
+        </div>
+        <div class="user-list">
+          ${users.map(renderUserRow).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderUserRow(user) {
+  const summary = getUserSummary(user.id);
+  const active = user.id === activeUserId;
+  return `
+    <article class="user-row ${active ? "is-active" : ""}">
+      <span class="user-avatar">${getUserInitial(user)}</span>
+      <div>
+        <strong>${user.name}</strong>
+        <em>${summary.handsPlayed} 手 · 筹码 ${summary.stack}</em>
+      </div>
+      <button type="button" data-action="switch-user" data-user-id="${user.id}" ${active ? "disabled" : ""}>${active ? "当前" : "进入"}</button>
+    </article>
+  `;
 }
 
 function renderTableHud() {
@@ -1346,7 +1561,17 @@ function bindEvents() {
   app.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
-      if (action === "reset") {
+      if (action === "open-users") {
+        userPanelOpen = true;
+        render();
+      } else if (action === "close-users") {
+        userPanelOpen = false;
+        render();
+      } else if (action === "create-user") {
+        createUserFromInput();
+      } else if (action === "switch-user") {
+        switchUser(button.dataset.userId);
+      } else if (action === "reset") {
         resetGame();
       } else if (action === "next-hand") {
         startHand();
@@ -1367,6 +1592,21 @@ function bindEvents() {
     raiseRange.addEventListener("input", (event) => {
       state.raiseTo = Number(event.target.value);
       render();
+    });
+  }
+
+  const newUserInput = app.querySelector("#new-user-name");
+  if (newUserInput) {
+    newUserInput.focus();
+    newUserInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        createUserFromInput();
+      }
+      if (event.key === "Escape") {
+        userPanelOpen = false;
+        render();
+      }
     });
   }
 }
